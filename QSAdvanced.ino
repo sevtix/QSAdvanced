@@ -436,9 +436,33 @@ void setup() {
   GEARVMETER.setRate(RATE_250);
 }
 
+
+/*
+  0 = BEFORE GEAR 1
+  1 = GEAR 1
+  2 = GEAR 1 - N
+  3 = GEAR N
+  4 = GEAR N - 2
+  5 = GEAR 2
+  6 = GEAR 2 - 3
+  7 = GEAR 3
+  8 = GEAR 3 - 4
+  9 = GEAR 4
+  10 = GEAR 4 - 5
+  11 = GEAR 5
+  12 = GEAR 5 - 6
+  13 = GEAR 6
+  14 = AFTER GEAR 6
+*/
+
+
+uint16_t LAST_SHIFT_DRUM_POS = 0;
+
 void loop() {
 
-  // GET ADC DATA
+
+  // * Reading Gear ADC Values ------------------------------------------
+
   float rawadc = GEARVMETER.getValue();
   uint16_t ADCVAL = 0;
 
@@ -448,59 +472,181 @@ void loop() {
     ADCVAL = 0;
   }
 
-  // FALLBACK
+  // * Default gear value
   GEAR = 0;
-  CUT = 1;
+
+  // * Shift Drum Pos Conditioning ------------------------------------------
+  uint16_t SHIFT_DRUM_POS = 0;
+
+  // BEFORE GEAR 1 RANGE
+  if (ADCVAL < GEAR_1_START) {
+    SHIFT_DRUM_POS = 0;
+  }
 
   // GEAR 1 RANGE
-  if (ADCVAL >= (GEAR_1_START - GEAR_RANGE_MARGIN) && ADCVAL <= (GEAR_1_END + GEAR_RANGE_MARGIN)) {
+  if (ADCVAL >= GEAR_1_START && ADCVAL <= GEAR_1_END) {
+    SHIFT_DRUM_POS = 1;
     GEAR = 1;
-    CUT = 0;
+  }
+
+  // GEAR 1 - N RANGE
+  if (ADCVAL > GEAR_1_END && ADCVAL < GEAR_N_START) {
+    SHIFT_DRUM_POS = 2;
   }
 
   // GEAR N RANGE
-  if (ADCVAL >= (GEAR_N_START - GEAR_RANGE_MARGIN) && ADCVAL <= (GEAR_N_END + GEAR_RANGE_MARGIN)) {
+  if (ADCVAL >= GEAR_N_START && ADCVAL <= GEAR_N_END) {
+    SHIFT_DRUM_POS = 3;
     GEAR = 0;
-    CUT = 0;
+  }
+
+  // GEAR N - 2 RANGE
+  if (ADCVAL > GEAR_N_END && ADCVAL < GEAR_2_START) {
+    SHIFT_DRUM_POS = 4;
   }
 
   // GEAR 2 RANGE
-  if (ADCVAL >= (GEAR_2_START - GEAR_RANGE_MARGIN) && ADCVAL <= (GEAR_2_END + GEAR_RANGE_MARGIN)) {
+  if (ADCVAL >= GEAR_2_START && ADCVAL <= GEAR_2_END) {
+    SHIFT_DRUM_POS = 5;
     GEAR = 2;
-    CUT = 0;
+  }
+
+  // GEAR 2 - 3 RANGE
+  if (ADCVAL > GEAR_2_END && ADCVAL < GEAR_3_START) {
+    SHIFT_DRUM_POS = 6;
   }
 
   // GEAR 3 RANGE
-  if (ADCVAL >= (GEAR_3_START - GEAR_RANGE_MARGIN) && ADCVAL <= (GEAR_3_END + GEAR_RANGE_MARGIN)) {
+  if (ADCVAL >= GEAR_3_START && ADCVAL <= GEAR_3_END) {
+    SHIFT_DRUM_POS = 7;
     GEAR = 3;
-    CUT = 0;
+  }
+
+  // GEAR 3 - 4 RANGE
+  if (ADCVAL > GEAR_3_END && ADCVAL < GEAR_4_START) {
+    SHIFT_DRUM_POS = 8;
   }
 
   // GEAR 4 RANGE
-  if (ADCVAL >= (GEAR_4_START - GEAR_RANGE_MARGIN) && ADCVAL <= (GEAR_4_END + GEAR_RANGE_MARGIN)) {
+  if (ADCVAL >= GEAR_4_START && ADCVAL <= GEAR_4_END) {
+    SHIFT_DRUM_POS = 9;
     GEAR = 4;
-    CUT = 0;
+  }
+
+  // GEAR 4 - 5 RANGE
+  if (ADCVAL > GEAR_4_END && ADCVAL < GEAR_5_START) {
+    SHIFT_DRUM_POS = 10;
   }
 
   // GEAR 5 RANGE
-  if (ADCVAL >= (GEAR_5_START - GEAR_RANGE_MARGIN) && ADCVAL <= (GEAR_5_END + GEAR_RANGE_MARGIN)) {
+  if (ADCVAL >= GEAR_5_START && ADCVAL <= GEAR_5_END) {
+    SHIFT_DRUM_POS = 11;
     GEAR = 5;
-    CUT = 0;
+  }
+
+  // GEAR 4 - 5 RANGE
+  if (ADCVAL > GEAR_5_END && ADCVAL < GEAR_6_START) {
+    SHIFT_DRUM_POS = 12;
   }
 
   // GEAR 6 RANGE
-  if (ADCVAL >= (GEAR_6_START - GEAR_RANGE_MARGIN) && ADCVAL <= (GEAR_6_END + GEAR_RANGE_MARGIN)) {
+  if (ADCVAL >= GEAR_6_START && ADCVAL <= GEAR_6_END) {
+    SHIFT_DRUM_POS = 13;
     GEAR = 6;
-    CUT = 0;
   }
 
-  if (CUT == 1) {
+  // GEAR 4 - 5 RANGE
+  if (ADCVAL > GEAR_6_END) {
+    SHIFT_DRUM_POS = 14;
+  }
+
+
+  // * Injection Cut Management ------------------------------------------
+  // Only cut injection during upshift
+
+  // Check if shift drum was in gear last loop and is now between gears
+
+  if (LAST_SHIFT_DRUM_POS == 5 && SHIFT_DRUM_POS == 6) {
+    // Upshift detected
+    Serial.println(LAST_SHIFT_DRUM_POS);
+    Serial.println(SHIFT_DRUM_POS);
+    Serial.println("******");
+    CUT = 1;
     CutInjection();
   }
 
-  if (CUT == 0) {
-    UncutInjection();
+  if (LAST_SHIFT_DRUM_POS == 7 && SHIFT_DRUM_POS == 8) {
+    // Upshift detected
+    Serial.println(LAST_SHIFT_DRUM_POS);
+    Serial.println(SHIFT_DRUM_POS);
+    Serial.println("******");
+    CUT = 1;
+    CutInjection();
   }
+
+  if (LAST_SHIFT_DRUM_POS == 9 && SHIFT_DRUM_POS == 10) {
+    // Upshift detected
+    Serial.println(LAST_SHIFT_DRUM_POS);
+    Serial.println(SHIFT_DRUM_POS);
+    Serial.println("******");
+    CUT = 1;
+    CutInjection();
+  }
+
+  if (LAST_SHIFT_DRUM_POS == 11 && SHIFT_DRUM_POS == 12) {
+    // Upshift detected
+    Serial.println(LAST_SHIFT_DRUM_POS);
+    Serial.println(SHIFT_DRUM_POS);
+    Serial.println("******");
+    CUT = 1;
+    CutInjection();
+  }
+
+
+
+  /*switch (LAST_SHIFT_DRUM_POS) {
+    case 1:
+    case 3:
+    case 5:
+    case 7:
+    case 9:
+    case 11:
+    case 13:
+      switch (SHIFT_DRUM_POS) {
+        case 2:
+        case 4:
+        case 6:
+        case 8:
+        case 10:
+        case 12:
+        case 14:
+          // Upshift detected
+          Serial.println(LAST_SHIFT_DRUM_POS);
+          Serial.println(SHIFT_DRUM_POS);
+          Serial.println("******");
+          CUT = 1;
+          CutInjection();
+          break;
+      }
+      break;
+  }*/
+
+  // Check if shift drum is in gear
+  switch (SHIFT_DRUM_POS) {
+    case 1:
+    case 3:
+    case 5:
+    case 7:
+    case 9:
+    case 11:
+    case 13:
+      // Release injection cut
+      CUT = 0;
+      UncutInjection();
+      break;
+  }
+
+  // * BLE Notify Management ------------------------------------------
 
   if (DEVICECONNECTED) {
     //sendLog(";" + String(millis()) + ";" + String(ADCVAL) + ";" + String(GEAR) + ";" + String(CUT) + ";");
@@ -525,6 +671,9 @@ void loop() {
     BLE_GEAR_ADC_CHARACTERISTIC->notify();
     BLE_CUT_CHARACTERISTIC->notify();
   }
+
+  // * Saving current drum pos for next loop ------------------------------------------
+  LAST_SHIFT_DRUM_POS = SHIFT_DRUM_POS;
 }
 
 void CutInjection() {
