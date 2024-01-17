@@ -1,3 +1,34 @@
+// Documentation
+/*
+  Gears:
+  0 = IN NEUTRAL, BETWEEN GEARS OR OTHER ERROR
+  1 = GEAR 1
+  2 = GEAR 2
+  3 = GEAR 3
+  4 = GEAR 4
+  5 = GEAR 5
+  6 = GEAR 6
+*/
+
+/*
+  Shift drum positions:
+  0 = BEFORE GEAR 1
+  1 = GEAR 1
+  2 = GEAR 1 - N
+  3 = GEAR N
+  4 = GEAR N - 2
+  5 = GEAR 2
+  6 = GEAR 2 - 3
+  7 = GEAR 3
+  8 = GEAR 3 - 4
+  9 = GEAR 4
+  10 = GEAR 4 - 5
+  11 = GEAR 5
+  12 = GEAR 5 - 6
+  13 = GEAR 6
+  14 = AFTER GEAR 6
+*/
+
 #include <Wire.h>
 #include <EEPROM.h>
 
@@ -46,6 +77,9 @@ uint16_t GEAR_5_START = 3612;
 uint16_t GEAR_5_END = 3620;
 uint16_t GEAR_6_START = 4362;
 uint16_t GEAR_6_END = 4370;
+
+// Saved shift drum pos from last loop
+uint16_t LAST_SHIFT_DRUM_POS = 0;
 
 // GEAR MARGIN
 // IS ADDED TO EACH _END AND SUBSTRACTED FROM EACH _START
@@ -375,9 +409,6 @@ void setup() {
   BLE_SERVER->setCallbacks(new BLE_SERVER_CALLBACK());
   BLEService *BLE_SERVICE = BLE_SERVER->createService(BLEUUID("798D0A29-DD0B-42A9-A3BC-2DF18819D5DF"), 50);
 
-  //BLE_LOG_CHARACTERISTIC = BLE_SERVICE->createCharacteristic(BLEUUID("00000000-0000-0000-0000-000000000001"), BLECharacteristic::PROPERTY_NOTIFY);
-  //BLE_LOG_CHARACTERISTIC->addDescriptor(new BLE2902());
-
   BLE_GEAR_ADC_CHARACTERISTIC = BLE_SERVICE->createCharacteristic(BLEUUID("00000000-0000-0000-0000-000000000001"), BLECharacteristic::PROPERTY_NOTIFY);
   BLE_GEAR_ADC_CHARACTERISTIC->addDescriptor(new BLE2902());
 
@@ -436,46 +467,27 @@ void setup() {
   GEARVMETER.setRate(RATE_250);
 }
 
-
-/*
-  0 = BEFORE GEAR 1
-  1 = GEAR 1
-  2 = GEAR 1 - N
-  3 = GEAR N
-  4 = GEAR N - 2
-  5 = GEAR 2
-  6 = GEAR 2 - 3
-  7 = GEAR 3
-  8 = GEAR 3 - 4
-  9 = GEAR 4
-  10 = GEAR 4 - 5
-  11 = GEAR 5
-  12 = GEAR 5 - 6
-  13 = GEAR 6
-  14 = AFTER GEAR 6
-*/
-
-
-uint16_t LAST_SHIFT_DRUM_POS = 0;
-
 void loop() {
 
-
   // * Reading Gear ADC Values ------------------------------------------
-
   float rawadc = GEARVMETER.getValue();
   uint16_t ADCVAL = 0;
 
+  // Only use positive adc values
   if (rawadc >= 0) {
-    ADCVAL = (uint16_t)round(GEARVMETER.getValue());
+    ADCVAL = (uint16_t)round(rawadc);
   } else {
+    // Set to 0 in case negative adc was detected
     ADCVAL = 0;
   }
 
-  // * Default gear value
+  // * Default gear value ------------------------------------------
+  // Used when shift drum is not in gear
   GEAR = 0;
 
   // * Shift Drum Pos Conditioning ------------------------------------------
+
+  // Current shift drum position
   uint16_t SHIFT_DRUM_POS = 0;
 
   // BEFORE GEAR 1 RANGE
@@ -544,7 +556,7 @@ void loop() {
     GEAR = 5;
   }
 
-  // GEAR 4 - 5 RANGE
+  // GEAR 5 - 6 RANGE
   if (ADCVAL > GEAR_5_END && ADCVAL < GEAR_6_START) {
     SHIFT_DRUM_POS = 12;
   }
@@ -564,72 +576,31 @@ void loop() {
   // * Injection Cut Management ------------------------------------------
   // Only cut injection during upshift
 
-  // Check if shift drum was in gear last loop and is now between gears
+  // Check if shift drum was in gear last loop and is now between gears:
 
   if (LAST_SHIFT_DRUM_POS == 5 && SHIFT_DRUM_POS == 6) {
     // Upshift detected
-    Serial.println(LAST_SHIFT_DRUM_POS);
-    Serial.println(SHIFT_DRUM_POS);
-    Serial.println("******");
     CUT = 1;
     CutInjection();
   }
 
   if (LAST_SHIFT_DRUM_POS == 7 && SHIFT_DRUM_POS == 8) {
     // Upshift detected
-    Serial.println(LAST_SHIFT_DRUM_POS);
-    Serial.println(SHIFT_DRUM_POS);
-    Serial.println("******");
     CUT = 1;
     CutInjection();
   }
 
   if (LAST_SHIFT_DRUM_POS == 9 && SHIFT_DRUM_POS == 10) {
     // Upshift detected
-    Serial.println(LAST_SHIFT_DRUM_POS);
-    Serial.println(SHIFT_DRUM_POS);
-    Serial.println("******");
     CUT = 1;
     CutInjection();
   }
 
   if (LAST_SHIFT_DRUM_POS == 11 && SHIFT_DRUM_POS == 12) {
     // Upshift detected
-    Serial.println(LAST_SHIFT_DRUM_POS);
-    Serial.println(SHIFT_DRUM_POS);
-    Serial.println("******");
     CUT = 1;
     CutInjection();
   }
-
-
-
-  /*switch (LAST_SHIFT_DRUM_POS) {
-    case 1:
-    case 3:
-    case 5:
-    case 7:
-    case 9:
-    case 11:
-    case 13:
-      switch (SHIFT_DRUM_POS) {
-        case 2:
-        case 4:
-        case 6:
-        case 8:
-        case 10:
-        case 12:
-        case 14:
-          // Upshift detected
-          Serial.println(LAST_SHIFT_DRUM_POS);
-          Serial.println(SHIFT_DRUM_POS);
-          Serial.println("******");
-          CUT = 1;
-          CutInjection();
-          break;
-      }
-      break;
-  }*/
 
   // Check if shift drum is in gear
   switch (SHIFT_DRUM_POS) {
